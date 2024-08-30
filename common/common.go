@@ -47,6 +47,7 @@ func GetRestyClient(baseUrl ...string) *resty.Client {
 			client.SetBaseURL(url)
 		}
 		restyClients.Store(url, client)
+		c = client
 	}
 	client = c.(*resty.Client)
 	return client
