@@ -88,12 +88,8 @@ func (srv *DepService) OnServiceChanged(handler func()) {
 	srv.nacosServiceChangedHandlers = append(srv.nacosServiceChangedHandlers, handler)
 }
 
-func (srv *DepService) NewHttpRequest(scheme ...string) *resty.Request {
-	s := "http"
-	if len(scheme) > 0 {
-		s = scheme[0]
-	}
-	return common.GetRestyClient(srv.BaseUrl(s)).R().SetHeaders(srv.GetRequestHeaders())
+func (srv *DepService) NewHttpRequest() *resty.Request {
+	return common.GetRestyClient(srv.BaseUrl("http")).R().SetHeaders(srv.GetRequestHeaders())
 }
 
 func (srv *DepService) updateNacosServiceInstance() error {
@@ -125,7 +121,7 @@ func (srv *DepService) onServiceInstanceChanged(instance *model.Instance, err er
 
 func (srv *DepService) BaseUrl(scheme string) string {
 	if srv.opts.Static != nil {
-		if srv.opts.Static.EnableTLS {
+		if srv.opts.Static.EnableTLS && (scheme == "http" || scheme == "ws") {
 			scheme = scheme + "s"
 		}
 		return fmt.Sprintf("%s://%s%s", scheme, srv.opts.Static.DomainName, srv.opts.Static.BasePath)

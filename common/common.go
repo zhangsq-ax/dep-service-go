@@ -62,9 +62,9 @@ func ResponseError(resBody []byte, successCode int) error {
 	return nil
 }
 
-func ExtractResponseData[T any](resBody []byte, data T) (T, error) {
+func ExtractResponseData[T any](resBody []byte, data T, path ...any) (T, error) {
 	var zero T
-	dataAny := jsoniter.Get(resBody, "data").GetInterface()
+	dataAny := jsoniter.Get(resBody, path...).GetInterface()
 	if dataAny == nil {
 		return zero, fmt.Errorf("no data in response: %s", string(resBody))
 	}
