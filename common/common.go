@@ -64,6 +64,9 @@ func ResponseError(resBody []byte, successCode int) error {
 
 func ExtractResponseData[T any](resBody []byte, data T, path ...any) (T, error) {
 	var zero T
+	if len(path) == 0 {
+		path = []any{"data"}
+	}
 	dataAny := jsoniter.Get(resBody, path...).GetInterface()
 	if dataAny == nil {
 		return zero, fmt.Errorf("no data in response: %s", string(resBody))
