@@ -4,18 +4,25 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/go-resty/resty/v2"
-	"github.com/gorilla/websocket"
-	jsoniter "github.com/json-iterator/go"
-	"github.com/zhangsq-ax/logs"
-	"go.uber.org/zap"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/go-resty/resty/v2"
+	"github.com/gorilla/websocket"
+	jsoniter "github.com/json-iterator/go"
+	"github.com/tidwall/gjson"
+	"github.com/zhangsq-ax/logs"
+	"go.uber.org/zap"
+	"golang.org/x/exp/slices"
 )
 
 var (
 	restyClients = sync.Map{}
+
+	ErrInvalidStatus = fmt.Errorf("invalid status")
+	ErrNoData        = fmt.Errorf("no data in response")
+	ErrInvalidData   = fmt.Errorf("invalid data")
 )
 
 func GetRestyClient(baseUrl ...string) *resty.Client {
@@ -53,30 +60,33 @@ func GetRestyClient(baseUrl ...string) *resty.Client {
 	return client
 }
 
-func ResponseError(resBody []byte, successCode int) error {
-	status := jsoniter.Get(resBody, "status").ToInt()
-	message := jsoniter.Get(resBody, "message").ToString()
-	if status != successCode {
-		return fmt.Errorf("invalid status: %d - %s", status, message)
+func ResponseError(resBody []byte, successCode ...int) error {
+	results := gjson.GetManyBytes(resBody, "status", "message")
+	status := int(results[0].Int())
+	message := results[1].String()
+	if len(successCode) == 0 {
+		return nil
+	}
+	if !slices.Contains(successCode, status) {
+		return fmt.Errorf("%w: %d - %s", ErrInvalidStatus, status, message)
 	}
 	return nil
 }
 
-func ExtractResponseData[T any](resBody []byte, data T, path ...any) (T, error) {
+func ExtractResponseData[T any](resBody []byte, data T, path ...string) (T, error) {
 	var zero T
 	if len(path) == 0 {
-		path = []any{"data"}
+		path = []string{"data"}
 	}
-	dataAny := jsoniter.Get(resBody, path...).GetInterface()
-	if dataAny == nil {
-		return zero, fmt.Errorf("no data in response: %s", string(resBody))
+	result := gjson.GetBytes(resBody, path[0])
+	if !result.Exists() {
+		return zero, fmt.Errorf("%w: %s", ErrNoData, string(resBody))
 	}
-	dataBytes, err := jsoniter.Marshal(dataAny)
+	err := jsoniter.Unmarshal([]byte(result.Raw), data)
 	if err != nil {
-		return zero, err
+		return zero, fmt.Errorf("%w: %s", ErrInvalidData, err.Error())
 	}
-	err = jsoniter.Unmarshal(dataBytes, data)
-	return data, err
+	return data, nil
 }
 
 func SubscribeByWebSocket(ctx context.Context, url string, headers map[string]string, handler func(message []byte)) {
